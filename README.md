@@ -1,2 +1,2 @@
-# oumbguet.github.io
-A clone of worldle to guess mathematician name
+# JEANPIERRESERREDLE
+A clone of worldle in which you need to find the firstname of a mathematician.
