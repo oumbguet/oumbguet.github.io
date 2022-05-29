@@ -1,14 +1,14 @@
 {
   "files": {
     "main.css": "/static/css/main.9a233c60.css",
-    "main.js": "/static/js/main.d5ce5445.js",
+    "main.js": "/static/js/main.904a5902.js",
     "static/media/jpserre.jpg": "/static/media/jpserre.5582c498245967bcba40.jpg",
     "index.html": "/index.html",
     "main.9a233c60.css.map": "/static/css/main.9a233c60.css.map",
-    "main.d5ce5445.js.map": "/static/js/main.d5ce5445.js.map"
+    "main.904a5902.js.map": "/static/js/main.904a5902.js.map"
   },
   "entrypoints": [
     "static/css/main.9a233c60.css",
-    "static/js/main.d5ce5445.js"
+    "static/js/main.904a5902.js"
   ]
 }
