@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>EuroMillions – Vérificateur de combinaisons</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <!-- PapaParse for robust CSV parsing -->
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js" defer></script>
+  <style>
+    :root{
+      --bg: #0b1020;        /* deep navy */
+      --panel: #121936;
+      --muted: #8ea0c6;
+      --text: #e9efff;
+      --accent: #7c9cff;
+      --accent-2: #4be1c3;
+      --danger: #ff6b6b;
+      --shadow: 0 10px 30px rgba(0,0,0,.25);
+      --radius: 18px;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0; font-family:Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+      color:var(--text); background: radial-gradient(1200px 700px at 70% -200px, #1d2a5a 0%, #0b1020 60%);
+      line-height:1.5;
+    }
+    header{
+      padding:32px 20px 10px; text-align:center;
+    }
+    header h1{ margin:0; font-size: clamp(24px, 3.2vw, 40px); letter-spacing:0.5px }
+    header p{ margin:.3rem auto 0; color:var(--muted) }
+
+    .container{ max-width:1100px; margin:20px auto 60px; padding:0 20px; }
+
+    .grid{
+      display:grid; gap:18px;
+      grid-template-columns: 1.1fr .9fr;
+    }
+    @media (max-width: 980px){ .grid{ grid-template-columns: 1fr; } }
+
+    .card{
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
+      border:1px solid rgba(255,255,255,.06);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+    .card .hd{ padding:16px 18px; border-bottom:1px solid rgba(255,255,255,.08); display:flex; align-items:center; justify-content:space-between }
+    .card .hd h3{ margin:0; font-size:18px }
+    .card .bd{ padding:18px }
+
+    .drop{
+      border:2px dashed rgba(255,255,255,.18); border-radius:14px; padding:22px; text-align:center; transition:.2s;
+      background: rgba(10, 18, 50, .35);
+    }
+    .drop:hover{ border-color: var(--accent); background: rgba(10,18,50,.5) }
+    .drop input{ display:none }
+    .drop .actions{ display:flex; gap:12px; justify-content:center; flex-wrap:wrap; margin-top:10px }
+    .btn{ cursor:pointer; background:var(--accent); color:#07102c; border:none; padding:10px 14px; border-radius:12px; font-weight:600; box-shadow: var(--shadow); }
+    .btn.secondary{ background:#24305c; color:var(--text); border:1px solid rgba(255,255,255,.1) }
+    .btn.ghost{ background:transparent; color:var(--text); border:1px dashed rgba(255,255,255,.2) }
+
+    .meta{ display:flex; gap:14px; flex-wrap:wrap; align-items:center; color:var(--muted); font-size:14px }
+
+    .inputs{ display:grid; gap:12px; grid-template-columns: repeat(7, 1fr); }
+    .inputs input{
+      width:100%; padding:12px 10px; border-radius:12px; border:1px solid rgba(255,255,255,.12);
+      background:#0d1533; color:var(--text); text-align:center; font-weight:700; font-size:18px;
+    }
+    .inputs input.star{ background:#0f2037 }
+    .inputs small{grid-column: 1 / -1; color:var(--muted)}
+
+    .row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center }
+    .row .spacer{ flex:1 }
+
+    .pill{ display:inline-flex; gap:6px; align-items:center; padding:6px 10px; border-radius:999px; background:#0f173b; color:var(--muted); border:1px solid rgba(255,255,255,.08) }
+
+    .results .match{ display:flex; align-items:center; gap:10px; flex-wrap:wrap }
+    .balls, .stars{ display:flex; gap:8px; align-items:center; flex-wrap:wrap }
+    .ball, .star{ width:34px; height:34px; border-radius:50%; display:grid; place-items:center; font-weight:800; font-size:14px }
+    .ball{ background: linear-gradient(180deg, #ffffff, #c8d2ff); color:#17224d; }
+    .ball.dim{ filter:grayscale(.7) opacity(.55) }
+    .star{ background: linear-gradient(180deg, #ffe7a3, #ffc773); color:#5a3c00; }
+    .star.dim{ filter:grayscale(.7) opacity(.55) }
+
+    .list{ display:grid; gap:10px }
+    .item{ padding:12px; border:1px solid rgba(255,255,255,.08); border-radius:14px; background:rgba(255,255,255,.02) }
+    .item h4{ margin:0 0 6px 0 }
+    .item .sub{ color:var(--muted); font-size:13px }
+
+    .muted{ color:var(--muted) }
+    .warn{ color:var(--danger); font-weight:600 }
+    footer{ text-align:center; color:var(--muted); padding:30px 12px }
+    a{ color: var(--accent-2); text-decoration: none }
+    code.k{ background:#0a1333; border:1px solid rgba(255,255,255,.08); padding:3px 6px; border-radius:6px }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>EuroMillions – Vérifier une combinaison</h1>
+    <p>Charge tes CSV (2011 → aujourd'hui), saisis 5 boules + 2 étoiles, et je te dis si la combinaison est déjà sortie, quand, et les 5 tirages les plus proches.</p>
+  </header>
+
+  <div class="container grid">
+    <!-- Left: Data loading + status -->
+    <section class="card">
+      <div class="hd">
+        <h3>1) Charger tes fichiers CSV</h3>
+        <span class="pill"><span id="fileCount">0</span> fichier(s) • <span id="drawCount">0</span> tirage(s)</span>
+      </div>
+      <div class="bd">
+        <label class="drop" id="drop">
+          <input id="fileInput" type="file" accept=".csv" multiple />
+          <div>
+            <strong>Glisse‑dépose</strong> ici tes fichiers ou <strong>clique</strong> pour parcourir.
+            <div class="actions">
+              <button class="btn" id="pickBtn" type="button">Choisir des CSV</button>
+              <button class="btn secondary" id="clearBtn" type="button">Vider</button>
+            </div>
+          </div>
+        </label>
+        <p class="muted" style="margin-top:10px">Format attendu : délimiteur <code class="k">;</code> et en‑têtes FR (ex. <em>boule_1</em>, <em>etoile_1</em>, <em>date_de_tirage</em>). Les variantes avec accents/encodage (ex. <em>numÃ©ro</em>) sont gérées automatiquement.</p>
+        <div class="meta" id="loadMeta" style="margin-top:10px; display:none"></div>
+      </div>
+    </section>
+
+    <!-- Right: Query -->
+    <section class="card">
+      <div class="hd">
+        <h3>2) Saisir une combinaison</h3>
+        <button class="btn" id="checkBtn" type="button">Vérifier</button>
+      </div>
+      <div class="bd">
+        <div class="inputs" id="inputs">
+          <input type="number" min="1" max="50" placeholder="B1" class="ball-in" />
+          <input type="number" min="1" max="50" placeholder="B2" class="ball-in" />
+          <input type="number" min="1" max="50" placeholder="B3" class="ball-in" />
+          <input type="number" min="1" max="50" placeholder="B4" class="ball-in" />
+          <input type="number" min="1" max="50" placeholder="B5" class="ball-in" />
+          <input type="number" min="1" max="12" placeholder="É1" class="star-in star" />
+          <input type="number" min="1" max="12" placeholder="É2" class="star-in star" />
+          <small>Astuce : colle aussi un format libre (« 1 2 3 4 5 + 1 2 ») ou appuie sur <code class="k">Entrée</code> pour lancer.</small>
+        </div>
+        <div class="row" style="margin-top:10px">
+          <input id="freeText" placeholder="ex : 5, 13, 30, 35, 36 + 2, 6" style="flex:1; padding:12px 12px; border-radius:12px; border:1px solid rgba(255,255,255,.12); background:#0d1533; color:var(--text)" />
+          <button class="btn ghost" id="pasteBtn" type="button">Remplir depuis la ligne</button>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <div class="pill">Plage boules : 1–50</div>
+          <div class="pill">Plage étoiles : 1–12*</div>
+          <span class="muted">(*) Les anciens tirages utilisaient parfois 1–11 ; la recherche gère tous les historiques.</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Results -->
+    <section class="card" style="grid-column: 1 / -1">
+      <div class="hd">
+        <h3>Résultats</h3>
+        <div class="pill" id="status">En attente de données…</div>
+      </div>
+      <div class="bd results">
+        <div id="exact"></div>
+        <hr style="border:none;border-top:1px solid rgba(255,255,255,.08); margin:18px 0">
+        <div id="nearest"></div>
+      </div>
+    </section>
+  </div>
+
+  <footer>
+    Fait pour GitHub Pages · <a href="https://github.com/" target="_blank" rel="noopener">déployer</a> en 1 fichier. Aucune donnée n'est envoyée côté serveur.
+  </footer>
+
+  <script>
+    // —— Utilities ——
+    const $$ = (q, el=document) => Array.from(el.querySelectorAll(q));
+    const $  = (q, el=document) => el.querySelector(q);
+
+    const normalizeHeader = (h) => (h||"")
+      .toString()
+      .trim()
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/\p{Diacritic}/gu, '')
+      .replace(/\s+/g,'_');
+
+    const onlyNums = (s) => (s||"").toString().match(/\d{1,2}/g)?.map(n=>+n) || [];
+
+    const parseDateFR = (s) => {
+      // Accept dd/mm/yyyy or yyyy-mm-dd
+      if(!s) return null;
+      const t = s.includes('/') ? s.split('/') : s.split('-');
+      let d,m,y; if(t[2].length === 4){ [d,m,y] = t.map(Number); } else { [y,m,d]=t.map(Number); }
+      return new Date(y, m-1, d);
+    };
+
+    function uniqueSorted(arr){ return [...new Set(arr)].sort((a,b)=>a-b); }
+
+    function asKey(balls, stars){
+      return `${uniqueSorted(balls).join('-')} | ${uniqueSorted(stars).join('-')}`;
+    }
+
+    function overlapScore(setA, setB){
+      let s = 0; for(const n of setA){ if(setB.has(n)) s++; } return s;
+    }
+
+    function formatDate(d){
+      return d ? d.toLocaleDateString('fr-FR', { weekday:'long', year:'numeric', month:'long', day:'numeric' }) : '';
+    }
+
+    function chip(n, type='ball', dim=false){
+      const c = document.createElement('span');
+      c.className = type === 'star' ? 'star' + (dim?' dim':'') : 'ball' + (dim?' dim':'');
+      c.textContent = n; return c;
+    }
+
+    // —— State ——
+    const state = {
+      draws: [], // { date: Date, jour: string, annee_numero: string, balls:[n], stars:[n] }
+      byKey: new Map(), // key -> [{...draw}]
+    };
+
+    function addDraw(draw){
+      const key = asKey(draw.balls, draw.stars);
+      if(!state.byKey.has(key)) state.byKey.set(key, []);
+      state.byKey.get(key).push(draw);
+      state.draws.push(draw);
+    }
+
+    function renderStatus(){
+      $('#fileCount').textContent = state._files || 0;
+      $('#drawCount').textContent = state.draws.length;
+      $('#status').textContent = state.draws.length ? 'Prêt ✔︎' : 'En attente de données…';
+    }
+
+    // —— CSV ingestion ——
+    function extractFromRow(row, headerMap){
+      // Try canonical columns first
+      const get = (name)=> row[headerMap[name]] ?? null;
+      const pickNums = (prefix, count) => {
+        const arr = [];
+        for(let i=1;i<=count;i++){
+          const v = get(`${prefix}_${i}`);
+          if(v!==null && v!==undefined && v!=="") arr.push(+String(v).replace(/\D+/g,''));
+        }
+        return arr.filter(n=>!Number.isNaN(n));
+      };
+
+      let balls = pickNums('boule',5);
+      let stars = pickNums('etoile',2);
+
+      // Fallback to concatenated strings like "-13-30-35-36-40-" and "-2-6-"
+      if(balls.length!==5){
+        const s = get('boules_gagnantes_en_ordre_croissant');
+        const nums = onlyNums(s);
+        if(nums.length>=5) balls = nums.slice(0,5);
+      }
+      if(stars.length!==2){
+        const s = get('etoiles_gagnantes_en_ordre_croissant');
+        const nums = onlyNums(s);
+        if(nums.length>=2) stars = nums.slice(0,2);
+      }
+
+      // Basic validation
+      if(balls.length!==5 || stars.length!==2) return null;
+
+      const d = get('date_de_tirage') || get('date') || get('date_tirage');
+      const jour = get('jour_de_tirage') || '';
+      const annee_numero = get('annee_numero_de_tirage') || get('annee_numero') || '';
+
+      return {
+        date: parseDateFR(String(d)),
+        jour: String(jour||'').toUpperCase(),
+        annee_numero: String(annee_numero||''),
+        balls: uniqueSorted(balls),
+        stars: uniqueSorted(stars)
+      };
+    }
+
+    function buildHeaderMap(fields){
+      const map = {};
+      fields.forEach((f,i)=>{ map[ normalizeHeader(f) ] = i; });
+      return map;
+    }
+
+    function parseFile(file){
+      return new Promise((resolve,reject)=>{
+        Papa.parse(file, {
+          delimiter: ';',
+          header: true,
+          skipEmptyLines: true,
+          transformHeader: (h)=> normalizeHeader(h),
+          complete: (res)=>{
+            try{
+              const headerMap = buildHeaderMap(res.meta.fields);
+              let added = 0;
+              for(const row of res.data){
+                const arr = Array.isArray(row) ? row : res.meta.fields.map(k=>row[k]);
+                const obj = Object.create(null);
+                res.meta.fields.forEach((k,idx)=>{ obj[idx] = arr[idx]; });
+                const draw = extractFromRow(obj, Object.fromEntries(res.meta.fields.map((f,i)=>[f,i])));
+                if(draw){ addDraw(draw); added++; }
+              }
+              resolve({file, added});
+            }catch(e){ reject(e); }
+          },
+          error: (e)=> reject(e)
+        });
+      });
+    }
+
+    async function handleFiles(files){
+      if(!files?.length) return;
+      state.draws.length = 0; state.byKey.clear();
+      const tasks = [...files].map(parseFile);
+      const outcome = await Promise.allSettled(tasks);
+      const loaded = outcome.filter(o=>o.status==='fulfilled').map(o=>o.value);
+      state._files = loaded.length;
+      renderStatus();
+      const meta = $('#loadMeta');
+      meta.style.display = 'block';
+      meta.innerHTML = loaded.length ?
+        loaded.map(o=>`<span class="pill">${o.file.name} : ${o.added} tirages</span>`).join(' ') :
+        `<span class="pill warn">Aucun fichier valide chargé.</span>`;
+    }
+
+    // —— Querying ——
+    function readInputs(){
+      const balls = $$('.ball-in').map(i=>+i.value).filter(n=>n>0);
+      const stars = $$('.star-in').map(i=>+i.value).filter(n=>n>0);
+      return { balls: uniqueSorted(balls), stars: uniqueSorted(stars) };
+    }
+
+    function readFreeText(){
+      const s = $('#freeText').value;
+      const parts = s.split('+');
+      const balls = onlyNums(parts[0]).slice(0,5);
+      const stars = onlyNums(parts[1]||'').slice(0,2);
+      return { balls: uniqueSorted(balls), stars: uniqueSorted(stars) };
+    }
+
+    function validateCombo({balls, stars}){
+      const issues = [];
+      if(balls.length!==5) issues.push('Il faut 5 boules.');
+      if(stars.length!==2) issues.push('Il faut 2 étoiles.');
+      if(balls.some(n=>n<1||n>50)) issues.push('Boules hors plage (1–50).');
+      if(stars.some(n=>n<1||n>12)) issues.push('Étoiles hors plage (1–12).');
+      if(new Set(balls).size!==5) issues.push('Boules en double.');
+      if(new Set(stars).size!==2) issues.push('Étoiles en double.');
+      return issues;
+    }
+
+    function renderChips(container, balls, stars, matchBalls = new Set(), matchStars = new Set()){
+      container.innerHTML = '';
+      const bWrap = document.createElement('div'); bWrap.className='balls';
+      const sWrap = document.createElement('div'); sWrap.className='stars';
+      balls.forEach(n=> bWrap.appendChild( chip(n,'ball', !matchBalls.has(n)) ));
+      stars.forEach(n=> sWrap.appendChild( chip(n,'star', !matchStars.has(n)) ));
+      container.append(bWrap, sWrap);
+    }
+
+    function search(combo){
+      const key = asKey(combo.balls, combo.stars);
+      const exacts = state.byKey.get(key) || [];
+
+      // nearest by overlap (5 balls + 2 étoiles)
+      const bSet = new Set(combo.balls), sSet = new Set(combo.stars);
+      const scored = state.draws.map(d=>{
+        const b = overlapScore(new Set(d.balls), bSet);
+        const s = overlapScore(new Set(d.stars), sSet);
+        return { draw:d, score: b + s, b, s };
+      });
+      scored.sort((a,b)=> b.score - a.score || b.draw.date - a.draw.date);
+      const top5 = scored.slice(0,5);
+      return { exacts, top5 };
+    }
+
+    function renderResults(combo, {exacts, top5}){
+      // Exact block
+      const exact = $('#exact');
+      exact.innerHTML = '';
+      const title = document.createElement('h3');
+      title.textContent = 'Combinaison demandée';
+      exact.appendChild(title);
+      const chips = document.createElement('div');
+      renderChips(chips, combo.balls, combo.stars, new Set(combo.balls), new Set(combo.stars));
+      exact.appendChild(chips);
+
+      if(!state.draws.length){
+        exact.insertAdjacentHTML('beforeend', `<p class="warn">Charge d'abord les CSV pour lancer la recherche.</p>`);
+        return;
+      }
+
+      if(exacts.length){
+        exact.insertAdjacentHTML('beforeend', `<p>✅ Sortie <strong>${exacts.length}</strong> fois :</p>`);
+        const list = document.createElement('div'); list.className='list';
+        exacts.sort((a,b)=> b.date-a.date).forEach(d=>{
+          const it = document.createElement('div'); it.className='item';
+          it.innerHTML = `
+            <h4>${formatDate(d.date)}</h4>
+            <div class="sub">${(d.jour||'').toLowerCase()} • tirage ${d.annee_numero||'–'}</div>
+          `;
+          const chips = document.createElement('div');
+          renderChips(chips, d.balls, d.stars, new Set(combo.balls), new Set(combo.stars));
+          it.appendChild(chips);
+          list.appendChild(it);
+        });
+        exact.appendChild(list);
+      } else {
+        exact.insertAdjacentHTML('beforeend', `<p>❌ Jamais sortie dans les fichiers chargés.</p>`);
+      }
+
+      // Nearest block
+      const near = $('#nearest');
+      near.innerHTML = `<h3>Top 5 des tirages les plus proches</h3>`;
+      if(!state.draws.length) return;
+      const list2 = document.createElement('div'); list2.className='list';
+      top5.forEach(({draw, score, b, s})=>{
+        const it = document.createElement('div'); it.className='item';
+        it.innerHTML = `
+          <div class="row" style="justify-content:space-between">
+            <h4 style="margin:0">${formatDate(draw.date)}</h4>
+            <span class="pill">Similarité : <strong>${score}/7</strong> <span class="muted">(${b} boules, ${s} étoile${s>1?'s':''})</span></span>
+          </div>
+          <div class="sub">${(draw.jour||'').toLowerCase()} • tirage ${draw.annee_numero||'–'}</div>
+        `;
+        const mb = new Set(draw.balls.filter(n=>combo.balls.includes(n)));
+        const ms = new Set(draw.stars.filter(n=>combo.stars.includes(n)));
+        const chips = document.createElement('div');
+        renderChips(chips, draw.balls, draw.stars, mb, ms);
+        it.appendChild(chips);
+        list2.appendChild(it);
+      });
+      near.appendChild(list2);
+    }
+
+    // —— Wire UI ——
+    const fileInput = $('#fileInput');
+    const drop = $('#drop');
+    $('#pickBtn').addEventListener('click', ()=> fileInput.click());
+    $('#clearBtn').addEventListener('click', ()=>{
+      state.draws.length = 0; state.byKey.clear(); state._files = 0; renderStatus();
+      $('#loadMeta').style.display='none'; $('#loadMeta').innerHTML='';
+      $('#exact').innerHTML=''; $('#nearest').innerHTML=''; $('#status').textContent='En attente de données…';
+      fileInput.value = '';
+    });
+
+    fileInput.addEventListener('change', (e)=> handleFiles(e.target.files).then(renderStatus));
+
+    ;['dragenter','dragover'].forEach(ev=> drop.addEventListener(ev, e=>{ e.preventDefault(); drop.classList.add('hover'); }));
+    ;['dragleave','drop'].forEach(ev=> drop.addEventListener(ev, e=>{ e.preventDefault(); drop.classList.remove('hover'); }));
+    drop.addEventListener('drop', (e)=>{ const files = e.dataTransfer.files; handleFiles(files).then(renderStatus); });
+
+    function getComboFromUI(){
+      const fromInputs = readInputs();
+      const fromFree = readFreeText();
+      const use = (fromFree.balls.length||fromFree.stars.length) ? fromFree : fromInputs;
+      const issues = validateCombo(use);
+      if(issues.length){ alert(issues.join('\n')); return null; }
+      return use;
+    }
+
+    $('#checkBtn').addEventListener('click', ()=>{
+      const combo = getComboFromUI();
+      if(!combo) return;
+      renderResults(combo, search(combo));
+    });
+
+    $('#pasteBtn').addEventListener('click', ()=>{
+      const {balls, stars} = readFreeText();
+      if(balls.length) $$('.ball-in').forEach((el, i)=> el.value = balls[i]||'');
+      if(stars.length) $$('.star-in').forEach((el, i)=> el.value = stars[i]||'');
+    });
+
+    // Enter key triggers check
+    document.addEventListener('keydown', (e)=>{
+      if(e.key==='Enter') $('#checkBtn').click();
+    });
+
+    renderStatus();
+  </script>
+</body>
+</html>
